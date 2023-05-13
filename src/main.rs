@@ -1,10 +1,16 @@
 use std::collections::BTreeMap;
+use std::fs;
 
-fn main() {
+fn main() -> Result<(), String> {
+    let path = "sysctl.conf";
+    let content = fs::read_to_string(path)
+        .map_err(|err|format!("Error opening {path}: {err}"))?;
+    println!("{:?}", parse(&content)?);
+    Ok(())
 }
 
 #[allow(dead_code)]
-fn parse(input: &str) -> Result<BTreeMap<&str, &str>, &str>
+fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>
 {
     input.lines()
         .map(parse_line)
@@ -15,7 +21,7 @@ fn parse(input: &str) -> Result<BTreeMap<&str, &str>, &str>
 /// Parse a single line into key-value pair, `Ok((key, value))`.
 /// Empty or comment lines will result in `Ok(None)`.
 /// Error if line is missing `=` or a key.
-fn parse_line(line: &str) -> Result<Option<(&str, &str)>, &str>
+fn parse_line(line: &str) -> Result<Option<(&str, &str)>, String>
 {
     let line = line.trim();
     // Ignore if comment.
@@ -25,7 +31,7 @@ fn parse_line(line: &str) -> Result<Option<(&str, &str)>, &str>
     let (key, value) = line.split_once('=').ok_or("missing =")?;
     let (key, value) = (key.trim(), value.trim());
     if key.is_empty() {
-        return Err("missing key")
+        return Err("missing key".to_string())
     }
     Ok(Some((key, value)))
 }
@@ -51,7 +57,7 @@ mod tests {
     use indoc::indoc;
 
     #[test]
-    fn test_example() -> Result<(), &'static str>{
+    fn test_example() -> Result<(), String>{
         let example = indoc!{r#"
             endpoint = localhost:3000
             debug = true

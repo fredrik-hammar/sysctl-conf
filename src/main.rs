@@ -12,6 +12,9 @@ fn parse(input: &str) -> Result<BTreeMap<&str, &str>, &str>
         .collect()
 }
 
+/// Parse a single line into key-value pair, `Ok((key, value))`.
+/// Empty or comment lines will result in `Ok(None)`.
+/// Error if line is missing `=` or a key.
 fn parse_line(line: &str) -> Result<Option<(&str, &str)>, &str>
 {
     let line = line.trim();
@@ -27,8 +30,13 @@ fn parse_line(line: &str) -> Result<Option<(&str, &str)>, &str>
     Ok(Some((key, value)))
 }
 
-/// Based on unstable feature for Result.
-/// See, https://doc.rust-lang.org/std/result/enum.Result.html#method.transpose
+/// Transposes a `Result` of an `Option` into an `Option` of a `Result`.
+///
+/// `Ok(None)` will be mapped to `None`.
+/// `Ok(Some(_))` and `Err(_)` will be mapped to `Some(Ok(_))` and `Some(Err(_))`.
+//
+// Based on unstable feature for Result.
+// See, https://doc.rust-lang.org/std/result/enum.Result.html#method.transpose
 fn transpose<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E>> {
     match result {
         Ok(Some(x)) => Some(Ok(x)),

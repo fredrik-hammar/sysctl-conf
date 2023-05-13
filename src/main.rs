@@ -7,27 +7,34 @@ fn main() {
 fn parse(input: &str) -> Result<BTreeMap<&str, &str>, &str>
 {
     input.lines()
-        .flat_map(parse_line)
+        .map(parse_line)
+        .flat_map(transpose)
         .collect()
 }
 
-fn parse_line(line: &str) -> Option<Result<(&str, &str), &str>>
+fn parse_line(line: &str) -> Result<Option<(&str, &str)>, &str>
 {
     let line = line.trim();
     // Ignore if comment.
     if line.starts_with(|c| c == '!' || c =='#') {
-        return None
+        return Ok(None)
     }
-    let split = line.split_once('=');
-    if split.is_none() {
-        return Some(Err("missing ="));
-    }
-    let (key, value) = split?;
+    let (key, value) = line.split_once('=').ok_or("missing =")?;
     let (key, value) = (key.trim(), value.trim());
     if key.is_empty() {
-        return Some(Err("missing key"))
+        return Err("missing key")
     }
-    Some(Ok((key, value)))
+    Ok(Some((key, value)))
+}
+
+/// Based on unstable feature for Result.
+/// See, https://doc.rust-lang.org/std/result/enum.Result.html#method.transpose
+fn transpose<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E>> {
+    match result {
+        Ok(Some(x)) => Some(Ok(x)),
+        Ok(None) => None,
+        Err(e) => Some(Err(e)),
+    }
 }
 
 #[cfg(test)]

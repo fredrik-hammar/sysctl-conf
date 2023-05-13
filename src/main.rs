@@ -1,13 +1,23 @@
 use std::collections::BTreeMap;
 use std::fs;
 
+use std::path::PathBuf;
+use clap::Parser;
+
 fn main() -> Result<(), String> {
-    let path = "sysctl.conf";
-    let content = fs::read_to_string(path)
-        .map_err(|err|format!("Error opening {path}: {err}"))?;
+    let file = Cli::parse().file;
+    let content = fs::read_to_string(&file)
+        .map_err(|err|format!("Error opening {}: {}", file.display(), err))?;
     println!("{:?}", parse(&content)?);
     Ok(())
 }
+
+#[derive(Parser)]
+struct Cli {
+    /// sysctl.conf file to parse
+    file: PathBuf,
+}
+
 
 #[allow(dead_code)]
 fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>

@@ -8,7 +8,7 @@ fn main() -> Result<(), String> {
     let content = fs::read_to_string(&file)
         .map_err(|err|format!("Error opening {}: {}", file.display(), err))?;
     for sysctl in parse(&content)? {
-        println!("{sysctl:?}", );
+        println!("{sysctl:?}");
     }
     Ok(())
 }

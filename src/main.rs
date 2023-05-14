@@ -21,7 +21,7 @@ struct Cli {
 
 #[derive(Debug, PartialEq)]
 struct Sysctl<'a> {
-    key: &'a str,
+    variable: &'a str,
     value: &'a str,
     ignore_failure: bool,
 }
@@ -34,9 +34,9 @@ fn parse(input: &str) -> Result<Vec<Sysctl>, String>
         .collect()
 }
 
-/// Parse a single line into key-value pair, `Ok((key, value))`.
+/// Parse a single line into variable-value pair, `Ok((variable, value))`.
 /// Empty or comment lines will result in `Ok(None)`.
-/// Error if line is missing `=` or a key.
+/// Error if line is missing `=` or a variable.
 fn parse_line(line: &str) -> Result<Option<Sysctl>, String>
 {
     let line = line.trim();
@@ -50,12 +50,12 @@ fn parse_line(line: &str) -> Result<Option<Sysctl>, String>
         None             => (line, false),
     };
 
-    let (key, value) = line.split_once('=').ok_or("missing =")?;
-    let (key, value) = (key.trim(), value.trim());
-    if key.is_empty() {
-        return Err("missing key".to_string())
+    let (variable, value) = line.split_once('=').ok_or("missing =")?;
+    let (variable, value) = (variable.trim(), value.trim());
+    if variable.is_empty() {
+        return Err("missing variable".to_string())
     }
-    Ok(Some(Sysctl {key, value, ignore_failure}))
+    Ok(Some(Sysctl {variable, value, ignore_failure}))
 }
 
 /// Transposes a `Result` of an `Option` into an `Option` of a `Result`.
@@ -86,9 +86,9 @@ mod tests {
             log.file = /var/log/console.log
         "#};
         assert_eq!(parse(example)?, Vec::from([
-            Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
-            Sysctl { key: "debug", value: "true", ignore_failure: false },
-            Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: false },
+            Sysctl { variable: "endpoint", value: "localhost:3000", ignore_failure: false },
+            Sysctl { variable: "debug", value: "true", ignore_failure: false },
+            Sysctl { variable: "log.file", value: "/var/log/console.log", ignore_failure: false },
         ]));
         Ok(())
     }
@@ -101,9 +101,9 @@ mod tests {
             - log.file = /var/log/console.log
         "#};
         assert_eq!(parse(example)?, Vec::from([
-            Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
-            Sysctl { key: "debug", value: "true", ignore_failure: true },
-            Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: true },
+            Sysctl { variable: "endpoint", value: "localhost:3000", ignore_failure: false },
+            Sysctl { variable: "debug", value: "true", ignore_failure: true },
+            Sysctl { variable: "log.file", value: "/var/log/console.log", ignore_failure: true },
         ]));
         Ok(())
     }
@@ -119,8 +119,8 @@ mod tests {
             kernel.modprobe = /sbin/mod probe
         "#};
         assert_eq!(parse(example)?, Vec::from([
-            Sysctl { key: "kernel.domainname", value: "example.com", ignore_failure: false },
-            Sysctl { key: "kernel.modprobe", value: "/sbin/mod probe", ignore_failure: false },
+            Sysctl { variable: "kernel.domainname", value: "example.com", ignore_failure: false },
+            Sysctl { variable: "kernel.modprobe", value: "/sbin/mod probe", ignore_failure: false },
         ]));
         Ok(())
     }

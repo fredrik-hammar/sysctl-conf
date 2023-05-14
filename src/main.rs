@@ -18,6 +18,8 @@ struct Cli {
     file: PathBuf,
 }
 
+// TODO: sysctl.conf represents commands so returning a list of commands
+// is more appropriate.
 fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>
 {
     input.lines()
@@ -36,6 +38,7 @@ fn parse_line(line: &str) -> Result<Option<(&str, &str)>, String>
     if line.starts_with(|c| c == '!' || c =='#') {
         return Ok(None)
     }
+    // TODO: Lines starting with `-` suppresses errors setting the value.
     let (key, value) = line.split_once('=').ok_or("missing =")?;
     let (key, value) = (key.trim(), value.trim());
     if key.is_empty() {

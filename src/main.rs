@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::fs;
 
 use std::path::PathBuf;
@@ -8,7 +7,9 @@ fn main() -> Result<(), String> {
     let file = Cli::parse().file;
     let content = fs::read_to_string(&file)
         .map_err(|err|format!("Error opening {}: {}", file.display(), err))?;
-    println!("{:?}", parse(&content)?);
+    for sysctl in parse(&content)? {
+        println!("{sysctl:?}", );
+    }
     Ok(())
 }
 
@@ -18,9 +19,14 @@ struct Cli {
     file: PathBuf,
 }
 
-// TODO: sysctl.conf represents commands so returning a list of commands
-// is more appropriate.
-fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>
+#[derive(Debug, PartialEq)]
+struct Sysctl<'a> {
+    key: &'a str,
+    value: &'a str,
+    ignore_failure: bool,
+}
+
+fn parse(input: &str) -> Result<Vec<Sysctl>, String>
 {
     input.lines()
         .map(parse_line)
@@ -31,7 +37,7 @@ fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>
 /// Parse a single line into key-value pair, `Ok((key, value))`.
 /// Empty or comment lines will result in `Ok(None)`.
 /// Error if line is missing `=` or a key.
-fn parse_line(line: &str) -> Result<Option<(&str, &str)>, String>
+fn parse_line(line: &str) -> Result<Option<Sysctl>, String>
 {
     let line = line.trim();
     // Ignore if comment.
@@ -44,7 +50,7 @@ fn parse_line(line: &str) -> Result<Option<(&str, &str)>, String>
     if key.is_empty() {
         return Err("missing key".to_string())
     }
-    Ok(Some((key, value)))
+    Ok(Some(Sysctl {key, value, ignore_failure: false}))
 }
 
 /// Transposes a `Result` of an `Option` into an `Option` of a `Result`.
@@ -74,10 +80,10 @@ mod tests {
             debug = true
             log.file = /var/log/console.log
         "#};
-        assert_eq!(parse(example)?, BTreeMap::from([
-            ("endpoint", "localhost:3000"),
-            ("debug", "true"),
-            ("log.file", "/var/log/console.log"),
+        assert_eq!(parse(example)?, Vec::from([
+            Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
+            Sysctl { key: "debug", value: "true", ignore_failure: false },
+            Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: false },
         ]));
         Ok(())
     }

@@ -10,15 +10,15 @@ fn main() -> Result<(), String> {
     let Cli {file, schema } = Cli::parse();
     let content = fs::read_to_string(&file)
         .map_err(|err|format!("Error opening {}: {}", file.display(), err))?;
-    let sysctls = parse_sysctl(&content)?;
-    for sysctl in &sysctls {
+    let conf = SysctlConf::parse(&content)?;
+    for sysctl in &conf.sysctls {
         println!("{sysctl:?}");
     }
     if let Some(schema) = schema {
         let schema = fs::read_to_string(schema)
             .map_err(|err|format!("Error opening {}: {}", file.display(), err))?;
         let schema = Schema::parse(&schema)?;
-        schema.validate(sysctls)?;
+        schema.validate(conf)?;
     }
     Ok(())
 }
@@ -32,10 +32,43 @@ struct Cli {
 }
 
 #[derive(Debug, PartialEq)]
+struct SysctlConf<'a> {
+    sysctls: Vec<Sysctl<'a>>
+}
+
+impl <'a> SysctlConf<'a> {
+    fn parse(content: &str) -> Result<SysctlConf, String> {
+        let sysctls: Vec<Sysctl> = content
+            .lines()
+            .map(str::trim)
+            .filter(|line| is_definition_line(line))
+            .map(Sysctl::parse)
+            .collect::<Result<Vec<Sysctl>, String>>()?;
+        Ok(SysctlConf { sysctls })
+    }
+}
+
+#[derive(Debug, PartialEq)]
 struct Sysctl<'a> {
     variable: &'a str,
     value: Value<'a>,
     ignore_failure: bool,
+}
+
+impl <'a> Sysctl<'a> {
+    fn parse(line: &str) -> Result<Sysctl, String> {
+        let (variable, value): (&str, &str) = parse_line_pair(line, "=")?;
+        let (variable, ignore_failure) = match variable.strip_prefix('-') {
+            Some(variable) => (variable.trim(), true),  // Remove whitespace after `-`.
+            None => (variable, false),
+        };
+
+        if variable.is_empty() {
+            return Err("missing variable".to_string())
+        }
+
+        Ok(Sysctl {variable, value: value.into(), ignore_failure})
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -94,37 +127,15 @@ impl Display for Value<'_> {
     }
 }
 
-fn parse_sysctl(input: &str) -> Result<Vec<Sysctl>, String>
-{
-    input.lines()
-        .map(parse_sysctl_line)
-        .flat_map(transpose)
-        .collect()
+fn is_definition_line(line: &str) -> bool {
+    !is_comment_or_whitespace(line)
 }
 
-/// Parse a single line into variable-value pair, `Ok((variable, value))`.
-/// Empty or comment lines will result in `Ok(None)`.
-/// Error if line is missing `=` or a variable.
-fn parse_sysctl_line(line: &str) -> Result<Option<Sysctl>, String>
-{
-    let line = line.trim();
-    // Ignore if comment.
-    if line.starts_with(|c: char| c == ';' || c =='#') {
-        return Ok(None)
-    }
-
-    let (line, ignore_failure) = match line.strip_prefix('-') {
-        Some(line) => (line.trim(), true),  // Remove whitespace after `-`.
-        None => (line, false),
-    };
-
-    let (variable, value) = line.split_once('=').ok_or("missing =")?;
-    let (variable, value) = (variable.trim(), value.trim());
-    if variable.is_empty() {
-        return Err("missing variable".to_string())
-    }
-    Ok(Some(Sysctl {variable, value: value.into(), ignore_failure}))
+/// Expects `line` to be trimmed.
+fn is_comment_or_whitespace(line: &str) -> bool {
+    line.starts_with(|c: char| c == ';' || c =='#')
 }
+
 
 #[derive(Debug, PartialEq)]
 struct Schema<'a> {
@@ -135,15 +146,16 @@ impl Schema<'_> {
     fn parse(content: &str) -> Result<Schema, String> {
         Ok(Schema {
             map: content.lines()
-                .map(parse_schema_line)
-                .flat_map(transpose)
+                .map(str::trim)
+                .filter(|line| is_definition_line(line))
+                .map(SchemaEntry::parse)
                 .map(|e| e.map(SchemaEntry::into))
                 .collect::<Result<BTreeMap<&str, Type>, String>>()?
         })
     }
 
-    fn validate(&self, sysctls: Vec<Sysctl>) -> Result<(), String> {
-        for sysctl in sysctls {
+    fn validate(&self, conf: SysctlConf) -> Result<(), String> {
+        for sysctl in conf.sysctls {
             let Sysctl { variable, value, ignore_failure } = sysctl;
             if ignore_failure { continue }
             let r#type = self.map.get(variable).ok_or(format!("not in schema: {variable}"))?;
@@ -158,6 +170,15 @@ impl Schema<'_> {
 struct SchemaEntry<'a> {
     variable: &'a str,
     r#type: Type,
+}
+
+impl <'a> SchemaEntry<'a> {
+    /// Parse a single definition line into variable-type pair.
+    /// Error if line is missing `:` or a variable.
+    fn parse(line: &str) -> Result<SchemaEntry, String> {
+        let (variable, r#type) = parse_line_pair(line, ":")?;
+        Ok(SchemaEntry { variable, r#type: r#type.parse()? })
+    }
 }
 
 impl <'a> From<SchemaEntry<'a>> for (&'a str, Type) {
@@ -233,50 +254,17 @@ impl FromStr for Type {
 }
 
 
-/// Parse a single line into variable-type pair.
-/// Empty or comment lines will result in `Ok(None)`.
-/// Error if line is missing `:` or a variable.
-fn parse_schema_line(line: &str) -> Result<Option<SchemaEntry>, String>
-{
-    if let Some((variable, r#type)) = parse_line_pair(line, ":")? {
-        Ok(Some(SchemaEntry { variable, r#type: r#type.parse()? }))
-    } else {
-        Ok(None)
-    }
-}
-
-/// Parse a single line into variable-value pair, `Ok((variable, value))`.
+/// Parse a non-empty line into variable-value pair, `Ok((variable, value))`.
 /// Empty or comment lines will result in `Ok(None)`.
 /// Error if line is missing delimiter or a variable.
-fn parse_line_pair<'a>(line: &'a str, delimiter: &str) -> Result<Option<(&'a str, &'a str)>, String>
+fn parse_line_pair<'a>(line: &'a str, delimiter: &str) -> Result<(&'a str, &'a str), String>
 {
-    let line = line.trim();
-    // Ignore if comment.
-    if line.starts_with(|c: char| c == ';' || c =='#') {
-        return Ok(None)
-    }
-
     let (variable, value) = line.split_once(delimiter).ok_or("missing =")?;
     let (variable, value) = (variable.trim(), value.trim());
     if variable.is_empty() {
         return Err("missing variable".to_string())
     }
-    Ok(Some((variable, value)))
-}
-
-/// Transposes a `Result` of an `Option` into an `Option` of a `Result`.
-///
-/// `Ok(None)` will be mapped to `None`.
-/// `Ok(Some(_))` and `Err(_)` will be mapped to `Some(Ok(_))` and `Some(Err(_))`.
-//
-// Based on unstable feature for Result.
-// See, https://doc.rust-lang.org/std/result/enum.Result.html#method.transpose
-fn transpose<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E>> {
-    match result {
-        Ok(Some(x)) => Some(Ok(x)),
-        Ok(None) => None,
-        Err(e) => Some(Err(e)),
-    }
+    Ok((variable, value))
 }
 
 #[cfg(test)]
@@ -292,11 +280,11 @@ mod tests {
             debug = true
             log.file = /var/log/console.log
         "#};
-        assert_eq!(parse_sysctl(example)?, Vec::from([
+        assert_eq!(SysctlConf::parse(example)?, SysctlConf { sysctls: Vec::from([
             Sysctl { variable: "endpoint", value: Str("localhost:3000"), ignore_failure: false },
             Sysctl { variable: "debug", value: Bool(true), ignore_failure: false },
             Sysctl { variable: "log.file", value: Str("/var/log/console.log"), ignore_failure: false },
-        ]));
+        ])});
         Ok(())
     }
 
@@ -308,11 +296,11 @@ mod tests {
             -debug = true
             - log.file = /var/log/console.log
         "#};
-        assert_eq!(parse_sysctl(example)?, Vec::from([
+        assert_eq!(SysctlConf::parse(example)?, SysctlConf { sysctls: Vec::from([
             Sysctl { variable: "endpoint", value: Str("localhost:3000"), ignore_failure: false },
             Sysctl { variable: "debug", value: Bool(true), ignore_failure: true },
             Sysctl { variable: "log.file", value: Str("/var/log/console.log"), ignore_failure: true },
-        ]));
+        ])});
         Ok(())
     }
 
@@ -327,10 +315,10 @@ mod tests {
             ; this one has a space which will be written to the sysctl!
             kernel.modprobe = /sbin/mod probe
         "#};
-        assert_eq!(parse_sysctl(example)?, Vec::from([
+        assert_eq!(SysctlConf::parse(example)?, SysctlConf { sysctls: Vec::from([
             Sysctl { variable: "kernel.domainname", value: Str("example.com"), ignore_failure: false },
             Sysctl { variable: "kernel.modprobe", value: Str("/sbin/mod probe"), ignore_failure: false },
-        ]));
+        ])});
         Ok(())
     }
 
@@ -343,11 +331,11 @@ mod tests {
             i8 = -1
             i16 = -1024
         "#};
-        assert_eq!(parse_sysctl(example)?, Vec::from([
+        assert_eq!(SysctlConf::parse(example)?, SysctlConf { sysctls: Vec::from([
             Sysctl { variable: "u8", value: U8(0), ignore_failure: false },
             Sysctl { variable: "u16", value: U16(1024), ignore_failure: false },
             Sysctl { variable: "i8", value: I8(-1), ignore_failure: false },
             Sysctl { variable: "i16", value: I16(-1024), ignore_failure: false },
-        ]));
+        ])});
         Ok(())
     }}

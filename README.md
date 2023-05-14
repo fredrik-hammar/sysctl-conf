@@ -19,4 +19,3 @@ Sysctl { variable: "log.file", value: "/var/log/console.log", ignore_failure: fa
 
 Each line represents the variable to set, the value to set it to, and whether
 failing to set it should be ignored.
-

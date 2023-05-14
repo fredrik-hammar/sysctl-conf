@@ -41,16 +41,21 @@ fn parse_line(line: &str) -> Result<Option<Sysctl>, String>
 {
     let line = line.trim();
     // Ignore if comment.
-    if line.starts_with(|c| c == '!' || c =='#') {
+    if line.starts_with(|c: char| c == '!' || c =='#') {
         return Ok(None)
     }
-    // TODO: Lines starting with `-` suppresses errors setting the value.
+
+    let (line, ignore_failure) = match line.strip_prefix('-') {
+        Some(line) => (line.trim(), true),  // Remove whitespace after `-`.
+        None             => (line, false),
+    };
+
     let (key, value) = line.split_once('=').ok_or("missing =")?;
     let (key, value) = (key.trim(), value.trim());
     if key.is_empty() {
         return Err("missing key".to_string())
     }
-    Ok(Some(Sysctl {key, value, ignore_failure: false}))
+    Ok(Some(Sysctl {key, value, ignore_failure}))
 }
 
 /// Transposes a `Result` of an `Option` into an `Option` of a `Result`.
@@ -84,6 +89,21 @@ mod tests {
             Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
             Sysctl { key: "debug", value: "true", ignore_failure: false },
             Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: false },
+        ]));
+        Ok(())
+    }
+
+    #[test]
+    fn test_ignore_failure() -> Result<(), String>{
+        let example = indoc!{r#"
+            endpoint = localhost:3000
+            -debug = true
+            - log.file = /var/log/console.log
+        "#};
+        assert_eq!(parse(example)?, Vec::from([
+            Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
+            Sysctl { key: "debug", value: "true", ignore_failure: true },
+            Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: true },
         ]));
         Ok(())
     }

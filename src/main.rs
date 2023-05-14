@@ -18,8 +18,6 @@ struct Cli {
     file: PathBuf,
 }
 
-
-#[allow(dead_code)]
 fn parse(input: &str) -> Result<BTreeMap<&str, &str>, String>
 {
     input.lines()

@@ -1,5 +1,7 @@
 # `sysctl-conf`
 
+![example workflow](https://github.com/fredrik-hammar/sysctl-conf/actions/workflows/rust.yml/badge.svg)
+
 Program to parse [sysctl.conf(5)](https://man7.org/linux/man-pages/man5/sysctl.conf.5.html)
 formatted documents as an assignment for Miletos employment.
 

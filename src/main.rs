@@ -41,7 +41,7 @@ fn parse_line(line: &str) -> Result<Option<Sysctl>, String>
 {
     let line = line.trim();
     // Ignore if comment.
-    if line.starts_with(|c: char| c == '!' || c =='#') {
+    if line.starts_with(|c: char| c == ';' || c =='#') {
         return Ok(None)
     }
 
@@ -104,6 +104,23 @@ mod tests {
             Sysctl { key: "endpoint", value: "localhost:3000", ignore_failure: false },
             Sysctl { key: "debug", value: "true", ignore_failure: true },
             Sysctl { key: "log.file", value: "/var/log/console.log", ignore_failure: true },
+        ]));
+        Ok(())
+    }
+
+    /// Sample from sysctl.conf(5) man page.
+    #[test]
+    fn test_sysctl_conf_sample() -> Result<(), String>{
+        let example = indoc!{r#"
+            # sysctl.conf sample
+            #
+            kernel.domainname = example.com
+            ; this one has a space which will be written to the sysctl!
+            kernel.modprobe = /sbin/mod probe
+        "#};
+        assert_eq!(parse(example)?, Vec::from([
+            Sysctl { key: "kernel.domainname", value: "example.com", ignore_failure: false },
+            Sysctl { key: "kernel.modprobe", value: "/sbin/mod probe", ignore_failure: false },
         ]));
         Ok(())
     }

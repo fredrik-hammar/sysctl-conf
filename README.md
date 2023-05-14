@@ -12,10 +12,19 @@ To test the program please run it with example file provided like this:
 
 ```sh
 $ cargo run sysctl.conf
-Sysctl { variable: "endpoint", value: "localhost:3000", ignore_failure: false }
-Sysctl { variable: "debug", value: "true", ignore_failure: false }
-Sysctl { variable: "log.file", value: "/var/log/console.log", ignore_failure: false }
+Sysctl { variable: "endpoint", value: Str("localhost:3000"), ignore_failure: false }
+Sysctl { variable: "debug", value: Bool(true), ignore_failure: false }
+Sysctl { variable: "log.file", value: Str("/var/log/console.log"), ignore_failure: false }
 ```
 
 Each line represents the variable to set, the value to set it to, and whether
 failing to set it should be ignored.
+
+You can also provide a schema to validate the type of the values.
+
+```sh
+$ cargo run sysctl.conf sysctl.schema
+Sysctl { variable: "endpoint", value: Str("localhost:3000"), ignore_failure: false }
+Sysctl { variable: "debug", value: Bool(true), ignore_failure: false }
+Sysctl { variable: "log.file", value: Str("/var/log/console.log"), ignore_failure: false }
+```

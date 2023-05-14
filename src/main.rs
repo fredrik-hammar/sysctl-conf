@@ -76,7 +76,7 @@ fn transpose<T, E>(result: Result<Option<T>, E>) -> Option<Result<T, E>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use indoc::indoc;
+    use indoc::indoc;  // To indent sample texts.
 
     #[test]
     fn test_example() -> Result<(), String>{
